@@ -29,19 +29,60 @@ export class Preloader extends Scene
 
     preload ()
     {
-        //  Load the assets for the game - Replace with your own assets
+        //  Load your otter sprites
         this.load.setPath('assets');
-
-        this.load.image('logo', 'logo.png');
-        this.load.image('star', 'star.png');
+        
+        this.load.image('otter_0', 'Otter Base/sprite_0.png');
+        this.load.image('otter_1', 'Otter Base/sprite_1.png');
+        this.load.image('otter_2', 'Otter Base/sprite_2.png');
+        this.load.image('otter_3', 'Otter Base/sprite_3.png');
+        this.load.image('otter_4', 'Otter Base/sprite_4.png');
+        this.load.image('otter_5', 'Otter Base/sprite_5.png');
+        
+        //  Load Sprout Lands tilesets (these contain multiple tiles)
+        this.load.setPath('assets/Sprout Lands - Sprites - Basic pack');
+        this.load.spritesheet('grass_tileset', 'Tilesets/Grass.png', {
+            frameWidth: 16,
+            frameHeight: 16
+        });
+        this.load.spritesheet('water_tileset', 'Tilesets/Water.png', {
+            frameWidth: 16,
+            frameHeight: 16
+        });
+        
+        //  Load objects for decoration
+        this.load.spritesheet('objects', 'Objects/Basic_Grass_Biom_things.png', {
+            frameWidth: 16,
+            frameHeight: 16
+        });
     }
 
     create ()
     {
-        //  When all the assets have loaded, it's often worth creating global objects here that the rest of the game can use.
-        //  For example, you can define global animations here, so we can use them in other scenes.
+        //  Create otter walk animation
+        this.anims.create({
+            key: 'otter_walk',
+            frames: [
+                { key: 'otter_0' },
+                { key: 'otter_1' },
+                { key: 'otter_2' },
+                { key: 'otter_3' },
+                { key: 'otter_4' },
+                { key: 'otter_5' }
+            ],
+            frameRate: 10,
+            repeat: -1
+        });
+        
+        //  Create water animation (frames 0-4)
+        this.anims.create({
+            key: 'water_flow',
+            frames: this.anims.generateFrameNumbers('water_tileset', { start: 0, end: 3 }),
+            frameRate: 3,
+            repeat: -1
+        });
 
-        //  Move to the MainMenu. You could also swap this for a Scene Transition, such as a camera fade.
-        this.scene.start('MainMenu');
+        //  Go straight to the game
+        this.scene.start('Game');
     }
 }
