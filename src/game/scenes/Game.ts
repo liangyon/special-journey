@@ -3,22 +3,43 @@ import { Scene } from 'phaser';
 import { MAIN_ISLAND } from '../data/IslandMaps';
 import { TileManager } from '../managers/TileManager';
 import { DecorationManager } from '../managers/DecorationManager';
+import { CollisionManager } from '../managers/CollisionManager';
+import { InteractionManager } from '../managers/InteractionManager';
+import { InventoryManager } from '../managers/InventoryManager';
+import { PuzzleManager } from '../managers/PuzzleManager';
+import { UIManager } from '../ui/UIManager';
 import { Player } from '../entities/Player';
+import { GameConstants } from '../config/GameConstants';
+import { MAIN_HOUSE, isWallTile, TILE_TYPES } from '../data/BuildingLayouts';
 
 export class Game extends Scene
 {
     camera: Phaser.Cameras.Scene2D.Camera;
     cursors: Phaser.Types.Input.Keyboard.CursorKeys;
+    wasdKeys: {
+        W: Phaser.Input.Keyboard.Key;
+        A: Phaser.Input.Keyboard.Key;
+        S: Phaser.Input.Keyboard.Key;
+        D: Phaser.Input.Keyboard.Key;
+    };
     
     // Grid settings
-    tileSize: number = 64;
-    gridWidth: number = 16;
-    gridHeight: number = 14;
+    tileSize: number = GameConstants.TILE_SIZE;
+    gridWidth: number = GameConstants.GRID_WIDTH;
+    gridHeight: number = GameConstants.GRID_HEIGHT;
     
     // Managers and entities
     private tileManager: TileManager;
     private decorationManager: DecorationManager;
+    private collisionManager: CollisionManager;
+    private interactionManager: InteractionManager;
+    private inventoryManager: InventoryManager;
+    private puzzleManager: PuzzleManager;
+    private uiManager: UIManager;
     private player: Player;
+    
+    // Event listeners for cleanup
+    private puzzleStateListener?: () => void;
 
     constructor ()
     {
@@ -34,10 +55,9 @@ export class Game extends Scene
         EventBus.emit('current-scene-ready', this);
     }
     
-    private setupCamera()
-    {
+    private setupCamera(): void {
         this.camera = this.cameras.main;
-        this.camera.setBackgroundColor(0x5b9bd5); // Ocean blue
+        this.camera.setBackgroundColor(GameConstants.CAMERA.BACKGROUND_COLOR);
         
         // Center camera on the island
         const worldCenterX = (this.gridWidth * this.tileSize) / 2;
@@ -47,7 +67,14 @@ export class Game extends Scene
     
     private createWorld()
     {
-        // Initialize managers
+        // Initialize core managers
+        this.collisionManager = new CollisionManager(this, this.gridWidth, this.gridHeight, this.tileSize);
+        this.interactionManager = new InteractionManager(this);
+        this.inventoryManager = new InventoryManager(this);
+        this.puzzleManager = new PuzzleManager(this);
+        this.uiManager = new UIManager(this);
+        
+        // Initialize world managers
         this.tileManager = new TileManager(
             this,
             MAIN_ISLAND,
@@ -55,64 +82,92 @@ export class Game extends Scene
             this.gridHeight,
             this.tileSize
         );
+        this.tileManager.setCollisionManager(this.collisionManager);
         
         this.decorationManager = new DecorationManager(this, this.tileSize);
+        this.decorationManager.setManagers(
+            this.collisionManager,
+            this.interactionManager,
+            this.inventoryManager,
+            this.puzzleManager
+        );
         
         // Build the world
         this.tileManager.createIsland();
         this.decorationManager.addDecorations();
         
-        // Create player
-        this.player = new Player(this, 8, 6, this.tileSize);
+        // Create player with collision manager
+        this.player = new Player(this, 10, 7, this.tileSize, this.collisionManager);
+        
+        // Listen for inventory changes with proper cleanup tracking
+        this.puzzleStateListener = () => {
+            EventBus.emit('update-inventory', this.inventoryManager.getItems());
+        };
+        EventBus.on('puzzle-state-changed', this.puzzleStateListener);
     }
     
-    private setupControls()
-    {
-        this.cursors = this.input.keyboard!.createCursorKeys();
+    
+    private setupControls(): void {
+        if (!this.input.keyboard) {
+            console.error('Keyboard input not available');
+            return;
+        }
         
-        // Add WASD keys as alternative controls
-        this.input.keyboard!.addKeys({
-            w: Phaser.Input.Keyboard.KeyCodes.W,
-            a: Phaser.Input.Keyboard.KeyCodes.A,
-            s: Phaser.Input.Keyboard.KeyCodes.S,
-            d: Phaser.Input.Keyboard.KeyCodes.D
+        this.cursors = this.input.keyboard.createCursorKeys();
+        
+        // Add WASD keys as alternative controls - store them to avoid recreating every frame
+        this.wasdKeys = this.input.keyboard.addKeys('W,A,S,D') as {
+            W: Phaser.Input.Keyboard.Key;
+            A: Phaser.Input.Keyboard.Key;
+            S: Phaser.Input.Keyboard.Key;
+            D: Phaser.Input.Keyboard.Key;
+        };
+        
+        // Add debug toggle key (C)
+        const debugKey = this.input.keyboard.addKey('C');
+        debugKey.on('down', () => {
+            this.collisionManager.toggleDebug();
+            console.log(`Collision Debug: ${this.collisionManager.isDebugEnabled() ? 'ON' : 'OFF'}`);
         });
     }
     
-    update()
-    {
-        if (this.player.isCurrentlyMoving()) return;
+    update(time: number, delta: number): void {
+        // Update interaction system
+        this.interactionManager.update(this.player.getGridX(), this.player.getGridY());
         
+        // Get continuous movement input
         const movement = this.getMovementInput();
-        if (movement.x !== 0 || movement.y !== 0) {
-            const newGridX = this.player.getGridX() + movement.x;
-            const newGridY = this.player.getGridY() + movement.y;
-            
-            if (this.tileManager.isValidPosition(newGridX, newGridY)) {
-                this.player.moveTo(newGridX, newGridY);
-            }
-        }
+        
+        // Update player movement (collision handled internally now)
+        this.player.update(delta, movement.x, movement.y);
+        
+        // Update debug visualization if enabled
+        this.collisionManager.updateDebug();
     }
     
-    private getMovementInput(): { x: number, y: number }
-    {
-        const keys = this.input.keyboard!.addKeys('W,A,S,D') as any;
-        
-        if (this.cursors.left.isDown || keys.A.isDown) {
+    private getMovementInput(): { x: number; y: number } {
+        if (this.cursors.left.isDown || this.wasdKeys.A.isDown) {
             return { x: -1, y: 0 };
-        } else if (this.cursors.right.isDown || keys.D.isDown) {
+        } else if (this.cursors.right.isDown || this.wasdKeys.D.isDown) {
             return { x: 1, y: 0 };
-        } else if (this.cursors.up.isDown || keys.W.isDown) {
+        } else if (this.cursors.up.isDown || this.wasdKeys.W.isDown) {
             return { x: 0, y: -1 };
-        } else if (this.cursors.down.isDown || keys.S.isDown) {
+        } else if (this.cursors.down.isDown || this.wasdKeys.S.isDown) {
             return { x: 0, y: 1 };
         }
         
         return { x: 0, y: 0 };
     }
 
-    changeScene ()
-    {
+    shutdown(): void {
+        // Clean up event listeners to prevent memory leaks
+        if (this.puzzleStateListener) {
+            EventBus.off('puzzle-state-changed', this.puzzleStateListener);
+            this.puzzleStateListener = undefined;
+        }
+    }
+
+    changeScene(): void {
         this.scene.start('GameOver');
     }
 }

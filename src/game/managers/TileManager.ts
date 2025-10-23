@@ -1,4 +1,6 @@
 import { Scene } from 'phaser';
+import { CollisionManager } from './CollisionManager';
+import { CollisionBox } from '../config/CollisionBoxes';
 
 interface Neighbors {
     top: boolean;
@@ -17,6 +19,7 @@ export class TileManager {
     private gridWidth: number;
     private gridHeight: number;
     private tileSize: number;
+    private collisionManager: CollisionManager | null = null;
 
     constructor(scene: Scene, islandMap: number[][], gridWidth: number, gridHeight: number, tileSize: number) {
         this.scene = scene;
@@ -26,10 +29,26 @@ export class TileManager {
         this.tileSize = tileSize;
     }
 
+    setCollisionManager(collisionManager: CollisionManager): void {
+        this.collisionManager = collisionManager;
+    }
+
     createIsland() {
         for (let y = 0; y < this.gridHeight; y++) {
             for (let x = 0; x < this.gridWidth; x++) {
                 this.createTile(x, y);
+                
+                // Register collision for water tiles (not walkable)
+                if (this.collisionManager && this.islandMap[y][x] === 0) {
+                    // Water tiles have full collision box
+                    const waterCollisionBox: CollisionBox = {
+                        x: 0,
+                        y: 0,
+                        width: 1,
+                        height: 1
+                    };
+                    this.collisionManager.registerTileCollision(x, y, [waterCollisionBox], 'water_tileset', 0);
+                }
             }
         }
     }

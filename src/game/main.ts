@@ -17,6 +17,10 @@ const config: Phaser.Types.Core.GameConfig = {
         width: 1280,
         height: 960
     },
+    render: {
+        pixelArt: true,
+        roundPixels: true
+    },
     scene: [
         Boot,
         Preloader,
