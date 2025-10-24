@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+
+# Block common tracking and analytics bots
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+Sitemap: https://otterhouse.com/sitemap.xml

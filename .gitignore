@@ -35,3 +35,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/REFACTORING_SUMMARY.md
+/SPROUT_LANDS_GUIDE.md
